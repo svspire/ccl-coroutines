@@ -70,10 +70,10 @@ to be cleaned up. There may be more work to do here.
 
 (in-package :ccl)
 
-(export '(:stack-group-return
-          :make-stack-group
-          :funcall-stack-group
-          :stack-group-preset))
+(export '(stack-group-return
+          make-stack-group
+          funcall-stack-group
+          stack-group-preset))
 
 (defclass stack-group (process)
   ((%resumer :initform (vector nil))
