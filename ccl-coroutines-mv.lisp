@@ -78,6 +78,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
              'sg-resumer sg new))))
 
 (defmethod sg-semaphore ((p process))
+  "So we can call stack-groups from ordinary processes"
   (or (getf (process-plist p) :run)
       (setf (getf (process-plist p) :run) (make-semaphore))))
 
@@ -97,6 +98,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
   (make-process name :class 'sg))
 
 (defun wait-to-run ()
+  "Wait until semaphore associated with *current-process* becomes positive, then decrement it and continue."
   (wait-on-semaphore (sg-semaphore *current-process*)))
 
 (defmethod sg-preset ((sg sg) function &rest args)
@@ -122,7 +124,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
     (signal-semaphore (sg-semaphore resumer))))
 
 (defun sg-return (&rest values)
-  "Returns value to resumer. Returned value from THIS function is always T."
+  "Returns value(s) to resumer. Called from the sg itself. Returned value from THIS function is always T."
   (apply #'%sg-return values)
   (wait-to-run))
 
@@ -138,7 +140,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
   (defun fringe1 (tree exhausted)
     (labels ((fringe (tree)
                (if (atom tree)
-                   (sg-return tree)
+                   (yield tree)
                    (progn
                      (fringe (car tree))
                      (when (cdr tree) (fringe (cdr tree)))))))

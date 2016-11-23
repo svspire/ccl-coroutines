@@ -11,8 +11,17 @@ Each file herein is independent of the others. For the most advanced functionali
 ```ccl-coroutines-basic.lisp```
 Provides basic coroutine functionality. Examples are at the end.
 
+At this point, these coroutines are really more like generators. They can yield a value, but
+they cannot specify which other routine to yield to. Thus these coroutines are not first-class;
+they always yield to the process that called them. Furthermore, it's not possible to call
+them with a value -- they are effectively thunks. Finally, there's no arbitration between
+multiple callers of these coroutines. If you call a coroutine from multiple processes, its
+state can be changed more than once and it'll be none the wiser. And it might well yield to
+the wrong process since there's only a single slot to contain the sg-resumer and that slot
+will get stomped on if two processes call the same coroutine at the same time.
+
 ```ccl-coroutines-sg.lisp```
 Improves ccl-coroutines-basic by being slightly less verbose.
 
 ```ccl-coroutines-mv.lisp```
-Improves ccl-coroutines-sg by enabling multiple return values.
+Improves ccl-coroutines-sg by enabling multiple yielded values.
