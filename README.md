@@ -25,3 +25,6 @@ Improves ccl-coroutines-basic by being slightly less verbose.
 
 ```ccl-coroutines-mv.lisp```
 Improves ccl-coroutines-sg by enabling multiple yielded values.
+
+```ccl-coroutines-args.lisp```
+Improves ccl-coroutines-mv by enabling sg-resume to pass args to the sg.

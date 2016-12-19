@@ -1,6 +1,7 @@
-;;; ccl-coroutines-mv.lisp
-;;; 10-Mar-2016
-;;; Improves on ccl-coroutines-sg.lisp by returning multiple values.
+;;; ccl-coroutines-args.lisp
+;;; 16-Dec-2016
+;;; Improves on ccl-coroutines-args.lisp by allowing input args on funcall-sg.
+;;; #'funcall-sg is now called #'sg-resume.
 
 ;;; Maintained by Shannon Spires <svs@bearlanding.com>
 ;;; Based on code by Gary Byers <gb@clozure.com>
@@ -39,20 +40,19 @@ The returned value(s) is/are stored in a slot of the producer stack-group proces
 protected such that the resumer won't see it half-written by the producer, but this
 code doesn't support having more than one resumer for a given producer.
 
-It's not possible in this code for the resumer to call the stack-group with a parameter.
-Many coroutine algorithms require this. It's probably not too difficult to add. 
 |#
 
 (in-package :ccl)
 
 (export '(sg-return
           make-sg
-          funcall-sg
+          sg-resume
           sg-preset))
 
 (defclass sg (process)
   ((%resumer :initform (vector nil))
    (value :initform nil)
+   (args :initform nil :accessor sg-args :documentation "Input args -- if any -- to stack group on resume")         
    (run :initform (make-semaphore) :reader sg-semaphore)))
 
 (define-condition sg-exhausted (error)
@@ -62,7 +62,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
              (with-slots (sg calling-thread) condition
                (format stream "Attempt to funcall exhausted stack group ~s by ~s." sg calling-thread)))))
 
-; resumer is defined only on true stack-groups; not regular processes. Regular processes can be resumers though.
+; resumer is defined only on true sgs; not regular processes. Regular processes can be resumers though.
 (defmethod sg-resumer ((sg sg))
   (with-slot-values (%resumer) sg
     (svref %resumer 0)))
@@ -79,7 +79,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
              'sg-resumer sg new))))
 
 (defmethod sg-semaphore ((p process))
-  "So we can call stack-groups from ordinary processes"
+  "So we can call sgs from ordinary processes"
   (or (getf (process-plist p) :run)
       (setf (getf (process-plist p) :run) (make-semaphore))))
 
@@ -108,29 +108,33 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
                            (multiple-value-call '%sg-return (apply function args))))
   (process-enable sg))
 
-; could call this sg-resume
-; can we enhance this to allow args to be passed?
-(defmethod funcall-sg ((sg sg))
+; Can be called from an ordinary process or from an sg
+(defmethod sg-resume ((sg sg) &rest args)
   (when (process-exhausted-p sg)
     (error 'sg-exhausted :sg sg :calling-thread *current-process*))
   (setf (sg-resumer sg) *current-process*)
+  (setf (sg-args sg) args)
   (signal-semaphore (sg-semaphore sg))
   (wait-to-run)
   (sg-value sg))
 
+; Should be called only from a true sg.
 (defun %sg-return (&rest values)
   (let* ((self *current-process*)
          (resumer (sg-resumer self)))
     (setf (sg-value self) values)
     (signal-semaphore (sg-semaphore resumer))))
 
+; Should be called only from a true sg.
 (defun sg-return (&rest values)
   "Returns value(s) to resumer. Called from the sg itself. Returned value from THIS function is always T."
   (apply #'%sg-return values)
-  (wait-to-run))
+  (wait-to-run)
+  (values-list (sg-args *current-process*)))
 
 (in-package :cl-user)
 
+; Should be called only from a true sg.
 (defmacro yield (&rest values) ; similar name defined in ccl but fortunately not exported.
   "Conventional coroutine terminology."
   `(sg-return ,@values))
@@ -155,8 +159,8 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
       (sg-preset sg1 #'fringe1 tree1 done)
       (sg-preset sg2 #'fringe1 tree2 done)
       (loop
-        (let* ((v1 (funcall-sg sg1))
-               (v2 (funcall-sg sg2)))
+        (let* ((v1 (sg-resume sg1))
+               (v2 (sg-resume sg2)))
           (cond ((not (eq v1 v2)) (return nil))
                 ((eq v1 done) (return t)))))))
   
@@ -174,7 +178,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
   (defun make-generator (sg items)
     (sg-preset sg #'gen items)
     (lambda ()
-      (funcall-sg sg)))
+      (sg-resume sg)))
   )
 
 ; (setf g (make-generator (make-sg "bar") '(a b c d e f)))
@@ -198,7 +202,7 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
     (let ((sg-dir (make-sg "dir")))
       (sg-preset sg-dir #'my-directory dirpath)
       #'(lambda ()
-          (funcall-sg sg-dir))))
+          (sg-resume sg-dir))))
   )
 
 ; Example 4. A quick-and-dirty directory generator that returns multiple values.
@@ -218,12 +222,13 @@ Many coroutine algorithms require this. It's probably not too difficult to add.
     (let ((sg-dir (make-sg "dir")))
       (sg-preset sg-dir #'my-directory dirpath)
       #'(lambda ()
-          (funcall-sg sg-dir))))
+          (sg-resume sg-dir))))
   )
 
 ;(setf g (directory-generator "ccl:*"))
 ;(funcall g)
 ;(funcall g)
 ; etc.
-; Pay attention to when it returns nil. That means it's done. If you call it
+; Pay attention to when it returns nil. That means it's done. I
+ you call it
 ;   after that, it'll throw a sg-exhausted error.

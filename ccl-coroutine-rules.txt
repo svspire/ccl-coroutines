@@ -1,0 +1,28 @@
+Rules for ccl-coroutines
+18-Dec-2016
+
+Functions in coroutines must obey certain rules.
+See fringe1 in for an example.
+
+1. Coroutines "return" in two different ways: 
+--As a normal function return, and
+--By calling yield. [which I think I'm going to rename to post because
+of a name conflict with yield in CCL]
+
+Any call to sg-resume (which used to be called funcall-g) will only
+see yielded values; it will never values created by ordinary returns.
+
+2. When a coroutine returns conventionally, it should either 
+return to itself or the resumer (caller) should expect it will be exhausted
+at that point and deal accordingly.
+
+3. A coroutine should either never return conventionally or
+should return only to a recursive call from itself.
+
+4. The resumer (caller) should be able to handle all the types
+that could be yielded. This is no different from conventional
+Lisp programming with caller being prepared to handle returned
+values, but here the returned value are coming through yield.
+
+Generally, the coroutine should not depend on its own returned
+value(s). It should be considered a purely side-effecting function.
