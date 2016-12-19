@@ -229,6 +229,5 @@ code doesn't support having more than one resumer for a given producer.
 ;(funcall g)
 ;(funcall g)
 ; etc.
-; Pay attention to when it returns nil. That means it's done. I
- you call it
-;   after that, it'll throw a sg-exhausted error.
+; Pay attention to when it returns nil. That means it's done. If you call it
+;   after that, it'll throw an sg-exhausted error.
